@@ -1,0 +1,24 @@
+ARIYO WEBSITE ORDER SYSTEM — INSTALLATION
+
+1. Back up your GitHub repository first.
+2. Review supabase/ariyo-order-system-migration.sql and verify the product catalogue/prices and bank details.
+3. In Supabase SQL Editor, run ONLY this migration once. Do NOT rerun the full setup.sql.
+4. In dashboard/config.js, set the correct project URL and publishable/anon key. Do not use a service_role/secret key. The homepage loads this same config.
+5. Upload/replace the ZIP contents in your GitHub repository, preserving assets/ and dashboard/ folders.
+6. Wait for GitHub Pages deployment. Hard-refresh the website on mobile (Chrome menu → refresh; if old behavior persists, clear site data/cache or update service worker).
+7. Sign in to a customer account, add an available product, complete every checkout field, transfer to the displayed account, attach receipt and submit.
+8. Verify order appears in customer My Account and admin Orders/Payments tabs. Confirm payment only after checking the bank transaction.
+9. Ensure the ARIYO owner account has role='admin' in public.profiles; never promote a user based only on client-side email.
+
+FLOW: Customer submits one checkout → receipt uploads privately → secure RPC calculates price from public.products and saves order/payment record → WhatsApp opens with order details → customer dashboard shows pending → admin verifies bank transaction → payment becomes paid and order status confirmed.
+
+LIMITATIONS: WhatsApp opens a prefilled message for the customer to send; a browser cannot silently send a WhatsApp message or automatically message a bot. If you need automatic bot delivery without customer tapping Send, that requires a separately configured WhatsApp Business Platform provider/webhook.
+
+CUSTOMER PURCHASE RECEIPT UPDATE
+- Customer My Account now shows a Download purchase receipt (PDF) button only when payment_status is paid/confirmed/succeeded/completed.
+- Receipt is generated in the browser and includes order number, date, customer, items, totals, payment status and tracking ID.
+- The customer dashboard query is restricted to the signed-in customer's own orders by customer_id. Ensure Supabase RLS policies enforce the same ownership rule.
+- PDF generation uses jsPDF from jsDelivr CDN; the customer needs internet access when downloading.
+
+DOMAIN
+- The ZIP does not buy or reserve ariyo.com. Check availability at a registrar and confirm renewal price before purchase. Once purchased, configure DNS/custom domain in GitHub Pages and enable HTTPS.
