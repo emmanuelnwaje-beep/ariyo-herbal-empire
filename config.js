@@ -1,6 +1,6 @@
 /* Configure only verified business information here. Never put a service-role/secret key in frontend files. */
 window.ARIYO_CONFIG={
- supabaseUrl:"",supabasePublishableKey:"",
+ supabaseUrl:"https://vdusnvbwlraiymoeaqds.supabase.co",supabasePublishableKey:"sb_publishable_maLQ95wMQlsqlsoBlnC9gA_Q6plF7jL",
  whatsappNumber:"+234 813 245 5540",
  whatsappCheckoutNumber:"2348132455540",
  bankTransfer:{accountNumber:"5216964606",accountName:"Ariyo herbal extracts",bankName:"Moniepoint"},
