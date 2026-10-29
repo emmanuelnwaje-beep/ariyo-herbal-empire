@@ -17,23 +17,100 @@ if(tab==='reviews'){const rows=await query('customer_reviews');el.innerHTML='<h2
 if(tab==='adverts'){const rows=await query('adverts');el.innerHTML=`<h2>Homepage adverts</h2><div class="panel"><input id="adId" type="hidden"><div class="formgrid"><div class="field"><label>Title</label><input id="adTitle"></div><div class="field"><label>Placement</label><select id="adPlacement">${opts(['homepage','announcement_bar','products','services'],'homepage')}</select></div></div><div class="field"><label>Message</label><textarea id="adMessage"></textarea></div><label><input id="adTyping" type="checkbox" checked style="width:auto"> Typing effect</label> <label><input id="adActive" type="checkbox" style="width:auto"> Active</label><p><button class="btn" id="adSave">Save advert</button></p></div><div class="tablewrap"><table><thead><tr><th>Advert</th><th>Placement</th><th>Active</th><th>Actions</th></tr></thead><tbody>${rows.map(x=>`<tr><td><b>${esc(x.title)}</b><br>${esc(x.message)}</td><td>${esc(x.placement)}</td><td>${x.is_active?'Yes':'No'}</td><td><button class="btn ghost" data-adedit="${x.id}">Edit</button> <button class="btn" data-addelete="${x.id}">Delete</button></td></tr>`).join('')}</tbody></table></div>`;$('adSave').onclick=async()=>{const id=$('adId').value,p={title:$('adTitle').value.trim(),message:$('adMessage').value.trim(),placement:$('adPlacement').value,typing_effect:$('adTyping').checked,is_active:$('adActive').checked,background_color:'#064a2d',text_color:'#ffffff',updated_at:new Date().toISOString()};if(!p.title||!p.message){alert('Enter title and message');return}const {error}=id?await sb.from('adverts').update(p).eq('id',id):await sb.from('adverts').insert(p);if(error)alert(error.message);else showTab(tab)};el.onclick=async e=>{let b=e.target.closest('[data-adedit],[data-addelete]');if(!b)return;let x=rows.find(r=>r.id===(b.dataset.adedit||b.dataset.addelete));if(b.dataset.adedit){$('adId').value=x.id;$('adTitle').value=x.title;$('adMessage').value=x.message;$('adPlacement').value=x.placement;$('adTyping').checked=x.typing_effect;$('adActive').checked=x.is_active}else if(confirm('Delete this advert?')){const {error}=await sb.from('adverts').delete().eq('id',x.id);if(error)alert(error.message);else showTab(tab)}};return}
 if(tab==='payouts'){
 const rows=await query('referral_payout_requests');
-const ids=[...new Set(rows.map(x=>x.customer_id).filter(Boolean))];
-let profiles=[],accounts=[];
-if(ids.length){
- const pr=await sb.from('profiles').select('id,display_name').in('id',ids); if(pr.error)throw pr.error; profiles=pr.data||[];
- const ar=await sb.from('referral_payout_accounts').select('customer_id,account_holder_name,bank_name,account_number').in('customer_id',ids); if(ar.error)throw ar.error; accounts=ar.data||[];
+const payoutIds=[...new Set(rows.map(x=>x.customer_id).filter(Boolean))];
+
+let accounts=[];
+if(payoutIds.length){
+  const ar=await sb.from('referral_payout_accounts')
+    .select('customer_id,account_holder_name,bank_name,account_number')
+    .in('customer_id',payoutIds);
+  if(ar.error)throw ar.error;
+  accounts=ar.data||[];
 }
-const nameById=new Map(profiles.map(x=>[x.id,x.display_name||'Customer']));
 const accountById=new Map(accounts.map(x=>[x.customer_id,x]));
-let referrals=[],commissions=[];
-const rr=await sb.from('referrals').select('id,referrer_id,referral_code,status').in('referrer_id',ids.length?ids:['00000000-0000-0000-0000-000000000000']);
-if(!rr.error) referrals=rr.data||[];
-if(referrals.length){const cr=await sb.from('referral_commissions').select('referral_id,referred_customer_id,order_id,order_amount,commission_amount,status,created_at').in('referral_id',referrals.map(x=>x.id)).order('created_at',{ascending:false}).limit(100);if(!cr.error)commissions=cr.data||[];}
-const referredIds=[...new Set(commissions.map(x=>x.referred_customer_id).filter(Boolean))];
-let referredProfiles=[];if(referredIds.length){const rp=await sb.from('profiles').select('id,display_name').in('id',referredIds);if(!rp.error)referredProfiles=rp.data||[];}
-const referredNameById=new Map(referredProfiles.map(x=>[x.id,x.display_name||'Customer']));
-el.innerHTML='<h2>Referral payout requests</h2><p class="muted">Match each request to the referrer and their saved bank account. Mark a request paid only after completing the bank transfer.</p><div class="tablewrap"><table><thead><tr><th>Referrer</th><th>Bank details</th><th>Amount</th><th>Status</th><th>Transfer reference / review</th></tr></thead><tbody>'+rows.map(x=>{const a=accountById.get(x.customer_id);return `<tr><td><b>${esc(nameById.get(x.customer_id)||'Customer')}</b><br><small>Customer ID: ${esc(x.customer_id)}</small></td><td>${a?`<b>${esc(a.account_holder_name)}</b><br>${esc(a.bank_name)}<br><b>${esc(a.account_number)}</b>`:'<span class="danger">No saved bank details found</span>'}</td><td>${money(x.amount)}</td><td>${esc(x.status)}</td><td><select data-payout-state="${x.id}">${opts(['pending','approved','rejected','paid'],x.status)}</select><input data-payout-ref="${x.id}" placeholder="Transfer reference" value="${esc(x.payout_reference||'')}"><button class="btn" data-save-payout="${x.id}">Save</button></td></tr>`}).join('')+'</tbody></table></div><h2 style="margin-top:24px">Referral activity and commissions</h2><p class="muted">This shows which customer used a referral record and the qualifying order/commission recorded for it. Commission is ₦500 when the database creates a qualifying commission record.</p><div class="tablewrap"><table><thead><tr><th>Referrer</th><th>Referral code</th><th>Referred customer</th><th>Order ID</th><th>Order amount</th><th>Commission</th><th>Status</th></tr></thead><tbody>'+commissions.map(c=>{const r=referrals.find(z=>z.id===c.referral_id);return `<tr><td>${esc(nameById.get(r?.referrer_id)||'Customer')}<br><small>${esc(r?.referrer_id||'')}</small></td><td>${esc(r?.referral_code||'—')}</td><td>${esc(referredNameById.get(c.referred_customer_id)||'Customer')}<br><small>${esc(c.referred_customer_id||'')}</small></td><td><small>${esc(c.order_id||'—')}</small></td><td>${money(c.order_amount)}</td><td>${money(c.commission_amount)}</td><td>${esc(c.status)}</td></tr>`}).join('')+'</tbody></table></div>';
-el.onclick=async e=>{const b=e.target.closest('[data-save-payout]');if(!b)return;const id=b.dataset.savePayout,status=el.querySelector(`[data-payout-state="${id}"]`).value,ref=el.querySelector(`[data-payout-ref="${id}"]`).value.trim();const patch={status,payout_reference:ref||null,reviewed_at:new Date().toISOString(),paid_at:status==='paid'?new Date().toISOString():null};const {error}=await sb.from('referral_payout_requests').update(patch).eq('id',id);alert(error?error.message:'Payout request updated.');if(!error)showTab(tab)};return}
+
+// Load every referral record, not only referrals belonging to payout request customers.
+const rr=await sb.from('referrals')
+  .select('id,referrer_id,referral_code,status');
+if(rr.error)throw rr.error;
+const referrals=rr.data||[];
+const referralIds=referrals.map(x=>x.id).filter(Boolean);
+
+let commissions=[];
+if(referralIds.length){
+  const cr=await sb.from('referral_commissions')
+    .select('referral_id,referred_customer_id,order_id,order_amount,commission_amount,status,created_at')
+    .in('referral_id',referralIds)
+    .order('created_at',{ascending:false})
+    .limit(500);
+  if(cr.error)throw cr.error;
+  commissions=cr.data||[];
+}
+
+// Profiles with referred_by set are the source of truth for referral activity.
+// This includes referred customers who have not earned a commission yet.
+const rp=await sb.from('profiles')
+  .select('id,display_name,referred_by,created_at')
+  .not('referred_by','is',null)
+  .order('created_at',{ascending:false})
+  .limit(500);
+if(rp.error)throw rp.error;
+const referredProfiles=rp.data||[];
+
+const allReferrerIds=[...new Set([
+  ...payoutIds,
+  ...referrals.map(x=>x.referrer_id).filter(Boolean),
+  ...referredProfiles.map(x=>x.referred_by).filter(Boolean)
+])];
+let referrerProfiles=[];
+if(allReferrerIds.length){
+  const pr=await sb.from('profiles')
+    .select('id,display_name')
+    .in('id',allReferrerIds);
+  if(pr.error)throw pr.error;
+  referrerProfiles=pr.data||[];
+}
+const nameById=new Map(referrerProfiles.map(x=>[x.id,x.display_name||'Customer']));
+const accountByCustomer=new Map(accounts.map(x=>[x.customer_id,x]));
+const referralByReferrer=new Map();
+referrals.forEach(r=>{
+  if(!referralByReferrer.has(r.referrer_id) || r.status==='active'){
+    referralByReferrer.set(r.referrer_id,r);
+  }
+});
+const commissionsByCustomer=new Map();
+commissions.forEach(c=>{
+  if(!c.referred_customer_id)return;
+  if(!commissionsByCustomer.has(c.referred_customer_id))commissionsByCustomer.set(c.referred_customer_id,[]);
+  commissionsByCustomer.get(c.referred_customer_id).push(c);
+});
+
+el.innerHTML='<h2>Referral payout requests</h2><p class="muted">Match each request to the referrer and their saved bank account. Mark a request paid only after completing the bank transfer.</p><div class="tablewrap"><table><thead><tr><th>Referrer</th><th>Bank details</th><th>Amount</th><th>Status</th><th>Transfer reference / review</th></tr></thead><tbody>'+
+(rows.length?rows.map(x=>{const a=accountByCustomer.get(x.customer_id);return `<tr><td><b>${esc(nameById.get(x.customer_id)||'Customer')}</b><br><small>Customer ID: ${esc(x.customer_id)}</small></td><td>${a?`<b>${esc(a.account_holder_name)}</b><br>${esc(a.bank_name)}<br><b>${esc(a.account_number)}</b>`:'<span class="danger">No saved bank details found</span>'}</td><td>${money(x.amount)}</td><td>${esc(x.status)}</td><td><select data-payout-state="${x.id}">${opts(['pending','approved','rejected','paid'],x.status)}</select><input data-payout-ref="${x.id}" placeholder="Transfer reference" value="${esc(x.payout_reference||'')}"><button class="btn" data-save-payout="${x.id}">Save</button></td></tr>`}).join(''):'<tr><td colspan="5">No payout requests yet.</td></tr>')+
+'</tbody></table></div><h2 style="margin-top:24px">All referral activity</h2><p class="muted">Every profile linked through a referral is listed here, even if there is no commission or payout request yet.</p><div class="tablewrap"><table><thead><tr><th>Referrer</th><th>Referral code</th><th>Referred customer</th><th>Joined</th><th>Commission total</th><th>Commission status</th></tr></thead><tbody>'+
+(referredProfiles.length?referredProfiles.map(p=>{
+  const r=referralByReferrer.get(p.referred_by);
+  const cs=commissionsByCustomer.get(p.id)||[];
+  const total=cs.reduce((sum,c)=>sum+Number(c.commission_amount||0),0);
+  const status=cs.length?[...new Set(cs.map(c=>String(c.status||'pending')))].join(', '):'No commission yet';
+  return `<tr><td><b>${esc(nameById.get(p.referred_by)||'Customer')}</b><br><small>${esc(p.referred_by||'')}</small></td><td>${esc(r?.referral_code||'—')}</td><td><b>${esc(p.display_name||'Customer')}</b><br><small>${esc(p.id)}</small></td><td>${p.created_at?esc(new Date(p.created_at).toLocaleString()):'—'}</td><td>${cs.length?money(total):'—'}</td><td>${esc(status)}</td></tr>`;
+}).join(''):'<tr><td colspan="6">No referred customers found. If a customer was referred, check that profiles.referred_by contains the referrer user ID.</td></tr>')+
+'</tbody></table></div><h2 style="margin-top:24px">Commission history</h2><p class="muted">Order-level commission records, including qualifying order amounts and statuses.</p><div class="tablewrap"><table><thead><tr><th>Referrer</th><th>Referral code</th><th>Referred customer</th><th>Order ID</th><th>Order amount</th><th>Commission</th><th>Status</th></tr></thead><tbody>'+
+(commissions.length?commissions.map(c=>{const r=referrals.find(z=>z.id===c.referral_id);const referred=referredProfiles.find(p=>p.id===c.referred_customer_id);return `<tr><td>${esc(nameById.get(r?.referrer_id)||'Customer')}<br><small>${esc(r?.referrer_id||'')}</small></td><td>${esc(r?.referral_code||'—')}</td><td>${esc(referred?.display_name||'Customer')}<br><small>${esc(c.referred_customer_id||'')}</small></td><td><small>${esc(c.order_id||'—')}</small></td><td>${money(c.order_amount)}</td><td>${money(c.commission_amount)}</td><td>${esc(c.status)}</td></tr>`}).join(''):'<tr><td colspan="7">No commission records yet.</td></tr>')+
+'</tbody></table></div>';
+
+el.onclick=async e=>{
+  const b=e.target.closest('[data-save-payout]');
+  if(!b)return;
+  const id=b.dataset.savePayout;
+  const status=el.querySelector(`[data-payout-state="${id}"]`).value;
+  const ref=el.querySelector(`[data-payout-ref="${id}"]`).value.trim();
+  const patch={status,payout_reference:ref||null,reviewed_at:new Date().toISOString(),paid_at:status==='paid'?new Date().toISOString():null};
+  const {error}=await sb.from('referral_payout_requests').update(patch).eq('id',id);
+  alert(error?error.message:'Payout request updated.');
+  if(!error)showTab(tab);
+};
+return}
 if(tab==='bank'){const {data,error}=await sb.from('bank_transfer_settings').select('*').order('updated_at',{ascending:false}).limit(5);if(error)throw error;const x=(data||[]).find(a=>a.is_active)||data?.[0]||{};el.innerHTML=`<h2>Bank transfer settings</h2><p class="muted">These details are shown to customers as payment destination details. Never store banking passwords, PINs or OTPs.</p><div class="formgrid"><div class="field"><label>Account name</label><input id="bankName" value="${esc(x.account_name||'Ariyo herbal extracts')}"></div><div class="field"><label>Bank</label><input id="bankBank" value="${esc(x.bank_name||'Moniepoint')}"></div><div class="field"><label>Account number</label><input id="bankNumber" value="${esc(x.account_number||'5216964606')}"></div><div class="field"><label>Instructions</label><input id="bankInstructions" value="${esc(x.instructions||'Please confirm your order with ARIYO before payment.')}"></div></div><label><input id="bankActive" type="checkbox" style="width:auto" checked> Active payment destination</label><p><button class="btn" id="bankSave">Save bank details</button></p>`;$('bankSave').onclick=async()=>{const p={account_name:$('bankName').value.trim(),bank_name:$('bankBank').value.trim(),account_number:$('bankNumber').value.trim(),instructions:$('bankInstructions').value.trim(),is_active:$('bankActive').checked,updated_by:(await sb.auth.getUser()).data.user.id};if(!p.account_name||!p.bank_name||!p.account_number){alert('Complete the account details.');return}if(x.id){const {error}=await sb.from('bank_transfer_settings').update(p).eq('id',x.id);alert(error?error.message:'Bank details saved.')}else{const {error}=await sb.from('bank_transfer_settings').insert(p);alert(error?error.message:'Bank details saved.')} };return}
 }catch(e){err(e)}}
 function opts(arr,val){return arr.map(x=>`<option value="${x}" ${x===val?'selected':''}>${x.replace(/_/g,' ')}</option>`).join('')}function title(t){return t[0].toUpperCase()+t.slice(1)}function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}function money(n){return n==null?'—':'₦'+Number(n).toLocaleString('en-NG')}
