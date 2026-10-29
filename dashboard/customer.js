@@ -20,7 +20,118 @@ function downloadReceipt(o){
   (Array.isArray(o.items)?o.items:[]).forEach(item=>{const qty=Number(item.qty||item.quantity||1),name=String(item.name||item.product_name||'Item'),unit=Number(item.price||item.unit_price||item.unitPrice||0),amount=Number(item.line_total||item.lineTotal||unit*qty);const lines=doc.splitTextToSize(name,95);doc.setFont('helvetica','normal');doc.setFontSize(9);doc.text(lines,left,y);doc.text(String(qty),125,y);doc.text(money(unit),145,y);doc.text(money(amount),190,y,{align:'right'});y+=Math.max(6,lines.length*4.5);if(y>260){doc.addPage();y=20}});
   y+=4;doc.line(left,y,192,y);y+=8;text('Subtotal: '+money(o.subtotal??o.total));text('Delivery fee: '+money(o.delivery_fee||0));text('TOTAL PAID: '+money(o.total),left,13,'bold');y+=5;doc.setFontSize(9);doc.setTextColor(90,90,90);doc.text('This receipt is generated electronically by ARIYO. Payment is shown as confirmed only after ARIYO verifies it.',left,y,{maxWidth:174});doc.save('ARIYO-Receipt-'+String(o.order_number||'purchase').replace(/[^a-z0-9-_]/gi,'-')+'.pdf');
 }
-async function loadCommissions(){const el=$('commissions');const {data:r}=await sb.from('referrals').select('id').eq('referrer_id',user.id);const ids=(r||[]).map(x=>x.id);if(!ids.length){el.innerHTML='<p class="muted">No referral activity yet. Share your referral link to start referring customers.</p>';$('balance').textContent='₦0';return}const {data,error}=await sb.from('referral_commissions').select('commission_amount,status,created_at,order_amount').in('referral_id',ids).order('created_at',{ascending:false});if(error){el.textContent='Could not load commissions. '+error.message;return}const bal=(data||[]).filter(x=>['approved','paid'].includes(x.status)).reduce((a,x)=>a+Number(x.commission_amount||0),0);$('balance').textContent=money(bal);el.innerHTML=data?.length?data.map(x=>`<div class="order"><b>${money(x.commission_amount)}</b> <span class="status">${esc(x.status)}</span><p class="muted">${new Date(x.created_at).toLocaleString()}</p></div>`).join(''):'<p class="muted">No commissions recorded yet. Commission is awarded only after the qualifying paid order is verified.</p>'}
+async function loadCommissions() {
+  const el = $('commissions');
+
+  el.innerHTML = '<p class="muted">Loading referral activity...</p>';
+
+  // Get all customers referred by the signed-in customer.
+  const {
+    data: activity,
+    error: activityError
+  } = await sb.rpc('get_my_referral_activity');
+
+  if (activityError) {
+    console.error('Referral activity error:', activityError);
+    el.innerHTML =
+      '<p class="muted">Could not load referral activity: ' +
+      esc(activityError.message) + '</p>';
+    return;
+  }
+
+  // Load commission records for the customer's referral codes.
+  const {
+    data: referrals,
+    error: referralsError
+  } = await sb
+    .from('referrals')
+    .select('id')
+    .eq('referrer_id', user.id);
+
+  if (referralsError) {
+    console.error('Referral records error:', referralsError);
+  }
+
+  const referralIds = (referrals || []).map(r => r.id);
+  let commissions = [];
+
+  if (referralIds.length) {
+    const {
+      data,
+      error
+    } = await sb
+      .from('referral_commissions')
+      .select('commission_amount,status,created_at,order_amount')
+      .in('referral_id', referralIds)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Commission records error:', error);
+    } else {
+      commissions = data || [];
+    }
+  }
+
+  // Calculate approved and paid commissions.
+  const balance = commissions
+    .filter(c =>
+      ['approved', 'paid'].includes(
+        String(c.status || '').toLowerCase()
+      )
+    )
+    .reduce(
+      (total, c) => total + Number(c.commission_amount || 0),
+      0
+    );
+
+  $('balance').textContent = money(balance);
+
+  // Display referred customers, even when they have no commission yet.
+  const customers = activity || [];
+
+  const customerHtml = customers.map(customer => {
+    const joined = customer.joined_at
+      ? new Date(customer.joined_at).toLocaleString()
+      : 'Date unavailable';
+
+    const commission = customer.commission_amount == null
+      ? 'No commission yet'
+      : money(customer.commission_amount) +
+        ' · ' +
+        esc(customer.commission_status || 'pending');
+
+    return `
+      <div class="order">
+        <h3>${esc(customer.referred_customer_name || 'Customer')}</h3>
+        <p>Referral status: Successfully referred</p>
+        <p>Commission: ${commission}</p>
+        <p class="muted">Joined: ${esc(joined)}</p>
+      </div>
+    `;
+  }).join('');
+
+  // Keep commission records visible as well.
+  const commissionHtml = commissions.length
+    ? `
+      <h3>Commission history</h3>
+      ${commissions.map(c => `
+        <div class="order">
+          <b>${money(c.commission_amount)}</b>
+          <span class="status">${esc(c.status)}</span>
+          <p class="muted">
+            ${c.created_at
+              ? new Date(c.created_at).toLocaleString()
+              : ''}
+          </p>
+        </div>
+      `).join('')}
+    `
+    : '';
+
+  el.innerHTML = customerHtml || commissionHtml
+    ? customerHtml + commissionHtml
+    : '<p class="muted">No referral activity yet. Share your referral link to start referring customers.</p>';
+}
 async function loadPayoutAccount(){const {data}=await sb.from('referral_payout_accounts').select('*').eq('customer_id',user.id).maybeSingle();if(data){$('payoutHolder').value=data.account_holder_name||'';$('payoutBank').value=data.bank_name||'';$('payoutAccount').value=data.account_number||''}}
 async function loadPayoutHistory(){const {data,error}=await sb.from('referral_payout_requests').select('*').eq('customer_id',user.id).order('requested_at',{ascending:false});$('payoutHistory').innerHTML=error?'<p class="muted">Payout history is unavailable.</p>':(data||[]).map(x=>`<div class="order">${money(x.amount)} · <span class="status">${esc(x.status)}</span><p class="muted">${new Date(x.requested_at).toLocaleString()}</p></div>`).join('')}
 $('savePayout').onclick=async()=>{const holder=$('payoutHolder').value.trim(),bank=$('payoutBank').value.trim(),account=$('payoutAccount').value.trim(),amount=Number($('payoutAmount').value);if(!holder||!bank||!/^\d{8,20}$/.test(account)||amount<=0){msg('payoutMessage','Enter account holder, bank, valid account number and a payout amount greater than zero.');return}msg('payoutMessage','Saving…');const {error:e1}=await sb.from('referral_payout_accounts').upsert({customer_id:user.id,account_holder_name:holder,bank_name:bank,account_number:account},{onConflict:'customer_id'});if(e1){msg('payoutMessage','Could not save bank details: '+e1.message);return}const {error:e2}=await sb.from('referral_payout_requests').insert({customer_id:user.id,amount});msg('payoutMessage',e2?'Could not submit payout request: '+e2.message:'Payout request submitted for admin review.',e2?'danger':'success');if(!e2){$('payoutAmount').value='';await loadPayoutHistory()}}
