@@ -98,3 +98,51 @@ footer{background:#063821;border-top:3px solid #d5aa37}
 
 /* Order checkout fields and bank transfer details */
 .checkout-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin:24px 0}.checkout-grid label{display:block;font-size:11px;font-weight:700;color:#566356}.checkout-grid input{display:block;width:100%;margin-top:6px;padding:12px;border:1px solid #dfe4d9;background:#fbfcf8;font-size:12px;color:#29372b}.checkout-grid input[type=file]{background:#fff}.checkout-grid small{display:block;font-size:10px;color:#687369;margin-top:5px}.bank-transfer-box{grid-column:1/-1;background:#eef2e7;border:1px solid #d8e0ce;border-radius:10px;padding:16px;display:grid;gap:5px;font-size:12px;color:#173d2c}.bank-transfer-box strong{font:22px var(--serif);margin-bottom:3px}.bank-transfer-box small{line-height:1.6}.checkout-grid label:has(input[type=file]){grid-column:1/-1}#whatsappCheckout:disabled{opacity:.6;cursor:wait}@media(max-width:620px){.checkout-grid{grid-template-columns:1fr}.bank-transfer-box{grid-column:auto}.checkout-grid label:has(input[type=file]){grid-column:auto}}
+
+
+/* MOBILE NAVIGATION CONTRAST FIX
+   Keeps the desktop navigation unchanged while making the opened
+   mobile menu readable against its light background. */
+@media (max-width: 620px) {
+  header {
+    position: sticky;
+    z-index: 100;
+  }
+
+  header nav,
+  header nav.open {
+    background: #fffef9;
+    border-top: 1px solid #e2e8dc;
+    box-shadow: 0 16px 28px rgba(6, 40, 24, 0.18);
+    z-index: 101;
+  }
+
+  header nav a,
+  header nav a:visited {
+    color: #064a2d !important;
+    opacity: 1;
+    font-weight: 700;
+    text-shadow: none;
+  }
+
+  header nav a:hover,
+  header nav a:focus-visible {
+    color: #987319 !important;
+    background: #f1f5e9;
+    outline-offset: 3px;
+  }
+
+  header nav a.navbtn,
+  header nav a.navbtn:visited {
+    background: #d5aa37;
+    color: #12351f !important;
+    border-radius: 22px;
+    text-align: center;
+  }
+
+  header nav a.navbtn:hover,
+  header nav a.navbtn:focus-visible {
+    background: #e4c45f;
+    color: #12351f !important;
+  }
+}
